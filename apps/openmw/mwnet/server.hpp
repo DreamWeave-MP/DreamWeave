@@ -4,6 +4,9 @@
 #include "connectionbase.hpp"
 #include "networkmessages.hpp"
 
+#include "../mwbase/environment.hpp"
+#include "../mwbase/luaeventrouter.hpp"
+
 namespace MWNet
 {
     class ServerAdapter : public MWNet::BaseAdapter
@@ -97,8 +100,8 @@ namespace MWNet
                                         << verifiedMessage->eventName << " with data: " << verifiedMessage->eventData
                                         << ", of size: " << verifiedMessage->eventData.size();
 
-                    const auto luaMgr = MWBase::Environment::get().getLuaManager();
-                    luaMgr->queueNetworkedGlobalEvent(verifiedMessage->eventName, verifiedMessage->eventData);
+                    MWBase::Environment::get().getLuaEventRouter()->receiveNetworkedGlobalEvent(
+                        clientIndex, verifiedMessage->eventName, verifiedMessage->eventData);
                 },
             };
 

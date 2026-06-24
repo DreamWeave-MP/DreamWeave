@@ -107,7 +107,8 @@ namespace MWLua
             world->rotateObject(newPtr, rot);
             if (placeOnGround)
                 world->adjustPosition(newPtr, true);
-            MWBase::Environment::get().getLuaManager()->objectTeleported(newPtr);
+            MWBase::Environment::get().forEachLuaManagerAuthoritativeFirst(
+                [&](MWBase::LuaManager& luaManager) { luaManager.objectTeleported(newPtr); });
         }
 
         void teleportNotPlayer(const MWWorld::Ptr& ptr, MWWorld::CellStore* destCell, const osg::Vec3f& pos,
@@ -155,7 +156,8 @@ namespace MWLua
             }
             if (!newPtr.getRefData().isEnabled())
                 world->enable(newPtr);
-            MWBase::Environment::get().getLuaManager()->objectTeleported(newPtr);
+            MWBase::Environment::get().forEachLuaManagerAuthoritativeFirst(
+                [&](MWBase::LuaManager& luaManager) { luaManager.objectTeleported(newPtr); });
         }
 
         template <typename ObjT>
@@ -413,30 +415,10 @@ namespace MWLua
                         context.mLuaManager->addCustomLocalScript(
                             object.ptr(), *scriptId, cfg[*scriptId].mInitializationData);
                 };
-                objectT["hasScript"] = [lua = context.mLua](const GObject& object, std::string_view path) {
-                    const LuaUtil::ScriptsConfiguration& cfg = lua->getConfiguration();
-                    std::optional<int> scriptId = cfg.findId(VFS::Path::Normalized(path));
-                    if (!scriptId)
-                        return false;
-                    MWWorld::Ptr ptr = object.ptr();
-                    LocalScripts* localScripts = ptr.getRefData().getLuaScripts();
-                    if (localScripts)
-                        return localScripts->hasScript(*scriptId);
-                    else
-                        return false;
-                };
-                objectT["removeScript"] = [lua = context.mLua](const GObject& object, std::string_view path) {
-                    const LuaUtil::ScriptsConfiguration& cfg = lua->getConfiguration();
-                    std::optional<int> scriptId = cfg.findId(VFS::Path::Normalized(path));
-                    if (!scriptId)
-                        throw std::runtime_error("Unknown script: " + std::string(path));
-                    MWWorld::Ptr ptr = object.ptr();
-                    LocalScripts* localScripts = ptr.getRefData().getLuaScripts();
-                    if (!localScripts || !localScripts->hasScript(*scriptId))
-                        throw std::runtime_error("There is no script " + std::string(path) + " on " + ptr.toString());
-                    if (localScripts->getAutoStartConf().count(*scriptId) > 0)
-                        throw std::runtime_error("Autostarted script can not be removed: " + std::string(path));
-                    localScripts->removeScript(*scriptId);
+                objectT["hasScript"] = [](const GObject&, std::string_view) { return false; };
+                objectT["removeScript"] = [](const GObject&, std::string_view) {
+                    // TODO: global-to-local script removal needs an explicit authority boundary.
+                    throw std::runtime_error("Global object scripts do not own local script containers");
                 };
 
                 using DelayedRemovalFn = std::function<void(MWWorld::Ptr)>;

@@ -39,10 +39,12 @@ namespace MWLua
     class LuaManager : public MWBase::LuaManager
     {
     public:
-        LuaManager(const VFS::Manager* vfs, const std::filesystem::path& libsDir);
+        LuaManager(const VFS::Manager* vfs, const std::filesystem::path& libsDir, RuntimeMode runtimeMode);
         LuaManager(const LuaManager&) = delete;
         LuaManager(LuaManager&&) = delete;
         ~LuaManager();
+
+        RuntimeMode getRuntimeMode() const override { return mRuntimeMode; }
 
         // Called by engine.cpp as part of content file loading
         void initPreLoad();
@@ -150,7 +152,7 @@ namespace MWLua
 
         // At the end of the next `synchronizedUpdate` drops script cache and reloads all scripts.
         // Calls `onSave` and `onLoad` for every script.
-        void reloadAllScripts() override { mReloadAllScriptsRequested = true; }
+        void reloadAllScripts() override;
 
         void handleConsoleCommand(
             const std::string& consoleMode, const std::string& command, const MWWorld::Ptr& selectedPtr) override;
@@ -213,12 +215,17 @@ namespace MWLua
         }
 
     private:
+        bool ownsAuthoritativeScriptContexts() const { return getRuntimeMode() == RuntimeMode::AuthoritativeServer; }
+        bool ownsClientScriptContexts() const { return getRuntimeMode() == RuntimeMode::Client; }
+        bool ownsLoadScriptContext() const { return ownsAuthoritativeScriptContexts(); }
+
         void initConfiguration(bool reload);
         LocalScripts* createLocalScripts(const MWWorld::Ptr& ptr,
             std::optional<LuaUtil::ScriptIdsWithInitializationData> autoStartConf = std::nullopt);
         void reloadAllScriptsImpl();
         void synchronizedUpdateUnsafe();
 
+        RuntimeMode mRuntimeMode;
         bool mInitialized = false;
         bool mGlobalScriptsStarted = false;
         bool mProcessingInputEvents = false;
@@ -241,8 +248,8 @@ namespace MWLua
 
         MWWorld::Ptr mPlayer;
 
-        LuaEvents mLuaEvents{ mGlobalScripts, mMenuScripts };
-        EngineEvents mEngineEvents{ mGlobalScripts };
+        LuaEvents mLuaEvents{ mGlobalScripts, mMenuScripts, ownsClientScriptContexts() };
+        EngineEvents mEngineEvents{ mGlobalScripts, ownsClientScriptContexts() };
         std::vector<MWBase::LuaManager::InputEvent> mInputEvents;
         std::vector<MWBase::LuaManager::InputEvent> mMenuInputEvents;
 
